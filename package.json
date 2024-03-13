@@ -18,7 +18,8 @@
     "esbuild": "^0.16.5"
   },
   "scripts": {
-    "build": "node build.js",
+    "prepare": "node build.js",
+    "build": "npm run prepare",
     "test": "node test/test.js"
   },
   "keywords": [
