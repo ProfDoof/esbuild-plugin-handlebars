@@ -2,18 +2,22 @@ import handlebars from "handlebars";
 import { PluginBuild, OnLoadOptions } from "esbuild";
 import { stat, readFile } from "fs/promises";
 
-let foundHelpers: string[] = [];
 const fileCache = new Map();
 
 // @ts-ignore
 class ESBuildHandlebarsJSCompiler extends handlebars.JavaScriptCompiler {
+  foundHelpers: Set<string> = new Set();
+  foundPartials: Set<string> = new Set();
+
   constructor() {
     super(...arguments);
   }
   public compiler: typeof ESBuildHandlebarsJSCompiler = ESBuildHandlebarsJSCompiler;
   nameLookup(parent, name: string, type) {
-    if (type === "helper" && !foundHelpers.includes(name)) {
-      foundHelpers.push(name);
+    if (type === "helper") {
+      this.foundHelpers.add(name);
+    } else if (type == "partial") {
+      this.foundPartials.add(name);
     }
     return super.nameLookup(parent, name, type);
   }
@@ -28,8 +32,7 @@ function hbs(options: { additionalHelpers: any; additionalPartials: any; precomp
   return {
     name: "handlebars",
     setup(build: PluginBuild) {
-      const hb = handlebars.create();
-      // @ts-ignore
+      const hb: any  = handlebars.create();
       hb.JavaScriptCompiler = ESBuildHandlebarsJSCompiler;
       build.onLoad(onloadOpt, async ({ path: filename }) => {
         if (fileCache.has(filename)) {
@@ -68,13 +71,15 @@ function hbs(options: { additionalHelpers: any; additionalPartials: any; precomp
         };
 
         try {
-          foundHelpers = [];
+          const foundHelpers: Set<string> = hb.JavaScriptCompiler.foundHelpers;
+          const foundPartials: Set<string> = hb.JavaScriptCompiler.foundPartials;
           const template = hb.precompile(source, compileOptions);
-          const foundAndMatchedHelpers = foundHelpers.filter((helper) => additionalHelpers[helper] !== undefined);
+          const foundAndMatchedHelpers = Array.from(foundHelpers).filter((helper) => Object.hasOwn(additionalHelpers, helper));
+          const foundAndMatchedPartials = Array.from(foundPartials).filter((partial) => Object.hasOwn(additionalPartials, partial));
           const contents = [
             "import * as Handlebars from 'handlebars/runtime';",
             ...foundAndMatchedHelpers.map((helper) => `import ${helper} from '${additionalHelpers[helper]}';`),
-            ...Object.entries(additionalPartials).map(([name, path]) => `import ${name} from '${path}';`),
+            ...foundAndMatchedPartials.map((partial) => `import ${partial} from '${additionalPartials[partial]}';`),
             `Handlebars.registerHelper({${foundAndMatchedHelpers.join()}});`,
             `Handlebars.registerPartial({${Object.keys(additionalPartials).join()}});`,
             `export default Handlebars.template(${template});`,
