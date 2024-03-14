@@ -4,20 +4,30 @@ import { stat, readFile } from "fs/promises";
 
 const fileCache = new Map();
 
+
+const foundHelpers: Map<string, Set<string>> = new Map();
+const foundPartials: Map<string, Set<string>> = new Map();
+
 // @ts-ignore
 class ESBuildHandlebarsJSCompiler extends handlebars.JavaScriptCompiler {
-  foundHelpers: Set<string> = new Set();
-  foundPartials: Set<string> = new Set();
-
   constructor() {
     super(...arguments);
   }
   public compiler: typeof ESBuildHandlebarsJSCompiler = ESBuildHandlebarsJSCompiler;
   nameLookup(parent, name: string, type) {
+    let srcName: string = this.options.srcName;
     if (type === "helper") {
-      this.foundHelpers.add(name);
+      if (!foundHelpers.has(srcName)) {
+        foundHelpers.set(srcName, new Set());
+      }
+
+      foundHelpers.get(srcName).add(name);
     } else if (type == "partial") {
-      this.foundPartials.add(name);
+      if (!foundPartials.has(srcName)) {
+        foundPartials.set(srcName, new Set());
+      }
+
+      foundPartials.get(srcName).add(name);
     }
     return super.nameLookup(parent, name, type);
   }
@@ -66,22 +76,25 @@ function hbs(options: { additionalHelpers: any; additionalPartials: any; precomp
         // Compile options
         const compileOptions = {
           ...precompileOptions,
+          srcName: filename,
           knownHelpersOnly: true,
           knownHelpers,
         };
 
         try {
-          const foundHelpers: Set<string> = hb.JavaScriptCompiler.foundHelpers;
-          const foundPartials: Set<string> = hb.JavaScriptCompiler.foundPartials;
-          const template = hb.precompile(source, compileOptions);
-          const foundAndMatchedHelpers = Array.from(foundHelpers).filter((helper) => Object.hasOwn(additionalHelpers, helper));
-          const foundAndMatchedPartials = Array.from(foundPartials).filter((partial) => Object.hasOwn(additionalPartials, partial));
+          const { code: template, map: srcMap } = hb.precompile(source, compileOptions);
+          const foundAndMatchedHelpers = foundHelpers.has(filename) ?
+            Array.from(foundHelpers.get(filename)).filter((helper) => Object.hasOwn(additionalHelpers, helper)):
+            [];
+          const foundAndMatchedPartials = foundPartials.has(filename) ?
+            Array.from(foundPartials.get(filename)).filter((partial) => Object.hasOwn(additionalPartials, partial)) :
+            [];
           const contents = [
             "import * as Handlebars from 'handlebars/runtime';",
             ...foundAndMatchedHelpers.map((helper) => `import ${helper} from '${additionalHelpers[helper]}';`),
             ...foundAndMatchedPartials.map((partial) => `import ${partial} from '${additionalPartials[partial]}';`),
             `Handlebars.registerHelper({${foundAndMatchedHelpers.join()}});`,
-            `Handlebars.registerPartial({${Object.keys(additionalPartials).join()}});`,
+            `Handlebars.registerPartial({${foundAndMatchedPartials.join()}});`,
             `export default Handlebars.template(${template});`,
           ].join("\n");
           return { contents };

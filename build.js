@@ -2,10 +2,11 @@ const esbuild = require("esbuild");
 
 const esBuildConfig = {
   bundle: true,
-  minify: true,
+  // minify: true,
   platform: "node",
   target: "es6",
   outdir: "dist",
+  sourcemap: true,
   entryPoints: ["./src/index.ts"],
 };
 

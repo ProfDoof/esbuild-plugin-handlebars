@@ -5,7 +5,7 @@ const handlebarsPlugin = require("../dist");
 
 const esBuildConfig = {
   bundle: true,
-  minify: true,
+  // minify: true,
   platform: "node",
   target: "es6",
   outdir: "./test/dist",
