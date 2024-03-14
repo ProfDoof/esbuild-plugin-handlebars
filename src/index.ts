@@ -90,7 +90,7 @@ function hbs(options: { additionalHelpers: any; additionalPartials: any; precomp
             Array.from(foundPartials.get(filename)).filter((partial) => Object.hasOwn(additionalPartials, partial)) :
             [];
           const contents = [
-            "import * as Handlebars from 'handlebars/dist/handlebars.runtime.js';",
+            "import Handlebars from 'handlebars/dist/handlebars.runtime.js';",
             ...foundAndMatchedHelpers.map((helper) => `import ${helper} from '${additionalHelpers[helper]}';`),
             ...foundAndMatchedPartials.map((partial) => `import ${partial} from '${additionalPartials[partial]}';`),
             `Handlebars.registerHelper({${foundAndMatchedHelpers.join()}});`,
